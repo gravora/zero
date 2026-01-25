@@ -1,0 +1,475 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/business_strategy_prototype/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String?
+  role          UserRole  @default(OWNER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  workspace     Workspace?
+  companies     Company[]
+}
+
+enum UserRole {
+  OWNER
+  MARKETER
+  MANAGER
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String   @default("My Workspace")
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Company {
+  id                String        @id @default(cuid())
+  name              String
+  legalForm         String?       // ТОО, ИП, ООО, etc.
+  country           String?
+  city              String?
+  industry          String?
+  salesModel        SalesModel?
+  website           String?
+  email             String?
+  phone             String?
+  bin               String?       // БИН/ИИН
+  completionPercent Int           @default(0)
+  status            CompanyStatus @default(DRAFT)
+  
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  businessContext   BusinessContext?
+  integrations      Integration[]
+  snapshots         Snapshot[]
+  dataGaps          DataGap[]
+  insights          AIInsight[]
+  manualChannelSnapshots ManualChannelSnapshot[]
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+enum SalesModel {
+  ECOMMERCE
+  LEADGEN
+  SUBSCRIPTION
+  HYBRID
+}
+
+enum CompanyStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+model BusinessContext {
+  id            String   @id @default(cuid())
+  companyId     String   @unique
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  goals         String[] // ["REVENUE_GROWTH", "PROFIT_GROWTH", etc.]
+  budgetMin     Float?
+  budgetMax     Float?
+  teamSize      Int?
+  geography     String[] // countries/regions
+  saleEventType String?  // purchase, paid_invoice, deal_won, order_paid
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Integration {
+  id            String            @id @default(cuid())
+  companyId     String
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  type          IntegrationType
+  name          String
+  status        IntegrationStatus @default(PENDING)
+  credentials   Json?             // encrypted OAuth tokens, API keys
+  config        Json?             // additional configuration
+  lastSyncAt    DateTime?
+  errorMessage  String?
+  
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+enum IntegrationType {
+  GRAVORA_TAG
+  GA4
+  BITRIX24
+  AMOCRM
+  HUBSPOT
+  GOOGLE_ADS
+  META_ADS
+  ROISTAT
+  CALLTOUCH
+  GOOGLE_SHEETS
+  EXCEL_IMPORT
+}
+
+enum IntegrationStatus {
+  PENDING
+  CONNECTING
+  CONNECTED
+  SYNCING
+  AUTH_ERROR
+  SYNC_ERROR
+  DISCONNECTED
+}
+
+model Snapshot {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  periodStart     DateTime
+  periodEnd       DateTime
+  granularity     String   @default("day") // day, week, month
+  
+  // Funnel metrics
+  sessions        Int      @default(0)
+  users           Int      @default(0)
+  leads           Int      @default(0)
+  deals           Int      @default(0)
+  sales           Int      @default(0)
+  repeatSales     Int      @default(0)
+  
+  // Sales metrics
+  revenue         Float    @default(0)
+  currency        String   @default("USD")
+  orders          Int      @default(0)
+  aov             Float    @default(0)
+  
+  // Marketing metrics
+  adSpend         Float    @default(0)
+  clicks          Int      @default(0)
+  impressions     Int      @default(0)
+  revenueFromAds  Float    @default(0)
+  
+  // Calculated metrics
+  crVisitLead     Float?   // conversion rate visit to lead
+  crLeadDeal      Float?   // conversion rate lead to deal
+  crDealSale      Float?   // conversion rate deal to sale
+  roas            Float?   // return on ad spend
+  cpa             Float?   // cost per acquisition
+  cpl             Float?   // cost per lead
+  
+  // Meta
+  sources         String[] // ["gravora_tag", "crm_bitrix", "google_ads"]
+  dataQualityScore Int     @default(0)
+  gateStatus      String   @default("A") // A, B, C
+  version         String   @default("1.0")
+  
+  isCurrent       Boolean  @default(false)
+  
+  createdAt       DateTime @default(now())
+}
+
+model DataGap {
+  id            String      @id @default(cuid())
+  companyId     String
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  severity      GapSeverity
+  area          String      // TRAFFIC, LEADS, DEALS, SALES, REVENUE, SPEND, etc.
+  status        String      // MISSING_SOURCE, AUTH_ERROR, STALE_DATA, MAPPING_REQUIRED
+  whatIsMissing String
+  impact        String
+  fixSteps      String[]    // array of instructions
+  ctaAction     String      // CONNECT_CRM, CONNECT_ADS, MAP_EVENTS, etc.
+  isResolved    Boolean     @default(false)
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+enum GapSeverity {
+  CRITICAL
+  IMPORTANT
+  OPTIONAL
+}
+
+model AIInsight {
+  id          String      @id @default(cuid())
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  agentType   AIAgentType
+  title       String
+  description String
+  category    String?     // bottleneck, quick_win, anomaly, recommendation
+  priority    Int         @default(0)
+  actionUrl   String?
+  isRead      Boolean     @default(false)
+  
+  createdAt   DateTime    @default(now())
+}
+
+enum AIAgentType {
+  ORCHESTRATOR
+  DATA_AUDITOR
+  ANALYST
+  STRATEGIST
+}
+
+model ChannelMetrics {
+  id          String   @id @default(cuid())
+  snapshotId  String
+  channel     String   // google_cpc, organic, direct, facebook, etc.
+  sessions    Int      @default(0)
+  leads       Int      @default(0)
+  sales       Int      @default(0)
+  revenue     Float    @default(0)
+  spend       Float    @default(0)
+  share       Float    @default(0) // percentage
+  
+  createdAt   DateTime @default(now())
+}
+
+model DailyMetrics {
+  id          String   @id @default(cuid())
+  companyId   String
+  date        DateTime
+  sessions    Int      @default(0)
+  leads       Int      @default(0)
+  sales       Int      @default(0)
+  revenue     Float    @default(0)
+  adSpend     Float    @default(0)
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([companyId, date])
+}
+
+// Manual Input для Этапа 0.01
+model ManualInput {
+  id              String       @id @default(cuid())
+  companyId       String
+  periodType      String       // "7days", "30days", "90days"
+  granularity     String       // "day", "week", "month"
+  periodIndex     Int          // Индекс периода (0, 1, 2...)
+  periodDate      DateTime     // Дата начала периода
+  periodLabel     String?      // "Янв 2025", "Февр 2025" для месячного ввода
+  
+  // Трафик и поведение
+  sessions        Int?
+  users           Int?
+  pageviews       Int?
+  engagementRate  Float?
+  bounceRate      Float?
+  
+  // Источники трафика (органический/платный)
+  organicSessions Int?
+  paidSessions    Int?
+  
+  // Воронка продаж
+  leads           Int?
+  deals           Int?
+  sales           Int?
+  orders          Int?
+  addToCart       Int?
+  checkout        Int?
+  
+  // Продажи и деньги
+  revenue         Float?
+  aov             Float?
+  refunds         Float?
+  returns         Int?
+  
+  // Маркетинг
+  adSpend         Float?
+  clicks          Int?
+  impressions     Int?
+  totalBudget     Float?       // Общий бюджет на кампанию
+  
+  // Retention
+  repeatSales     Int?
+  repeatRate      Float?
+  
+  // Маржа
+  cogs            Float?
+  grossMargin     Float?
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  @@unique([companyId, periodType, periodIndex])
+}
+
+model ManualSnapshot {
+  id                String   @id @default(cuid())
+  companyId         String   @unique
+  dataMode          DataMode @default(MANUAL_SANDBOX)
+  periodType        String   // "7days", "30days", "90days"
+  granularity       String   @default("day") // "day", "week", "month"
+  currency          String   @default("USD")
+  timezone          String   @default("UTC")
+  periodDays        Int      @default(30) // количество дней в периоде
+  
+  // Агрегированные метрики трафика
+  totalSessions     Int      @default(0)
+  totalUsers        Int      @default(0)
+  totalPageviews    Int      @default(0)
+  avgEngagementRate Float?
+  avgBounceRate     Float?
+  
+  // Источники трафика
+  totalOrganicSessions Int   @default(0)
+  totalPaidSessions    Int   @default(0)
+  organicTrafficShare  Float? // % органического трафика
+  paidTrafficShare     Float? // % платного трафика
+  
+  // Агрегированные метрики воронки
+  totalLeads        Int      @default(0)
+  totalDeals        Int      @default(0)
+  totalSales        Int      @default(0)
+  totalOrders       Int      @default(0)
+  totalRepeatSales  Int      @default(0)
+  
+  // Агрегированные метрики продаж
+  totalRevenue      Float    @default(0)
+  totalRefunds      Float    @default(0)
+  avgAov            Float?
+  dailySales        Float?   // Среднее кол-во продаж в день
+  dailyRevenue      Float?   // Средняя выручка в день
+  
+  // Агрегированные метрики маркетинга
+  totalAdSpend      Float    @default(0)
+  totalClicks       Int      @default(0)
+  totalImpressions  Int      @default(0)
+  totalBudget       Float?   // Общий бюджет на кампанию
+  
+  // Маржа
+  totalCogs         Float?
+  avgGrossMargin    Float?
+  
+  // Конверсии воронки продаж
+  crSessionLead     Float?   // CR: Sessions → Leads (Посетители → Лиды)
+  crLeadDeal        Float?   // CR: Leads → Deals (Лиды → Сделки)
+  crDealSale        Float?   // CR: Deals → Sales (Сделки → Продажи)
+  crSessionSale     Float?   // CR: Sessions → Sales (сквозная конверсия)
+  crClickLead       Float?   // CR: Clicks → Leads
+  
+  // Стоимость за действие (каналы)
+  cpc               Float?   // Cost Per Click = AdSpend / Clicks
+  cpu               Float?   // Cost Per User = AdSpend / Users  
+  cpl               Float?   // Cost Per Lead = AdSpend / Leads
+  cpd               Float?   // Cost Per Deal = AdSpend / Deals
+  cps               Float?   // Cost Per Sale = AdSpend / Sales (CAC)
+  cpm               Float?   // Cost Per Mille = (AdSpend / Impressions) * 1000
+  
+  // Финансовые метрики
+  roi               Float?   // ROI = (Revenue - AdSpend) / AdSpend * 100
+  romi              Float?   // ROMI = (Revenue - AdSpend) / AdSpend * 100 (для маркетинга)
+  roas              Float?   // ROAS = Revenue / AdSpend
+  grossProfit       Float?   // Валовая прибыль = Revenue - COGS
+  netProfit         Float?   // Чистая прибыль = Revenue - COGS - AdSpend
+  repeatRate        Float?   // Repeat Rate = RepeatSales / Sales * 100
+  
+  // Клиентская аналитика  
+  atp               Float?   // Average Transaction Price (средний чек) = Revenue / Sales
+  sph               Float?   // Sales Per Head (доход на клиента) = Revenue / Users
+  ltv               Float?   // Lifetime Value = ATP * среднее кол-во покупок
+  cac               Float?   // Customer Acquisition Cost = AdSpend / Sales
+  ebitda            Float?   // EBITDA = Revenue - COGS - AdSpend
+  ebitdaMargin      Float?   // EBITDA Margin = EBITDA / Revenue * 100
+  grossMargin       Float?   // Gross Margin = (Revenue - COGS) / Revenue * 100
+  
+  // CTR
+  ctr               Float?   // Click-Through Rate = Clicks / Impressions * 100
+  
+  // Data Quality
+  dataQualityScore  Int      @default(0)
+  gateStatus        String   @default("SANDBOX")
+  validationErrors  Json?    // Список ошибок валидации
+  
+  // Mapping
+  saleEventType     String?  // "paid_order", "paid_deal"
+  leadEventType     String?  // "form_submit", "lead_created"
+  dealEventType     String?  // "deal_created", "kp_sent"
+  repeatWindow      Int      @default(30) // дней
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+enum DataMode {
+  MANUAL_SANDBOX
+  LIVE_INTEGRATIONS
+  HYBRID
+}
+
+// Каналы трафика для ручного ввода
+model ManualChannelInput {
+  id              String   @id @default(cuid())
+  companyId       String
+  periodType      String   // "7days", "30days", "90days"
+  periodIndex     Int      // Индекс периода (0, 1, 2...)
+  periodLabel     String?  // "Янв 2025"
+  
+  channelName     String   // "Instagram", "TikTok", "Facebook", "Google Ads", "Яндекс.Директ", etc.
+  channelType     String   // "social", "search", "direct", "organic", "referral", "custom"
+  
+  sessions        Int?
+  clicks          Int?
+  impressions     Int?
+  leads           Int?
+  sales           Int?
+  revenue         Float?
+  adSpend         Float?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([companyId, periodType, periodIndex, channelName])
+}
+
+// Агрегированные данные по каналам для ManualSnapshot
+model ManualChannelSnapshot {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  channelName     String
+  channelType     String?
+  
+  sessions        Int      @default(0)
+  clicks          Int      @default(0)
+  impressions     Int      @default(0)
+  leads           Int      @default(0)
+  sales           Int      @default(0)
+  revenue         Float    @default(0)
+  adSpend         Float    @default(0)
+  
+  // Рассчитанные метрики
+  cpc             Float?
+  cpl             Float?
+  cpm             Float?
+  cps             Float?
+  cr              Float?   // Конверсия сессий в лиды
+  roas            Float?
+  shareOfTraffic  Float?   // % от общего трафика
+  
+  createdAt       DateTime @default(now())
+  
+  @@unique([companyId, channelName])
+}
