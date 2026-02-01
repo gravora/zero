@@ -61,15 +61,9 @@ export default function WelcomeScreen() {
           <div className="flex items-center gap-4">
             <Link
               href="/auth/login"
-              className="text-gray-300 hover:text-white transition-colors px-4 py-2"
-            >
-              Войти
-            </Link>
-            <Link
-              href="/auth/register"
               className="btn-primary flex items-center gap-2"
             >
-              Начать <ArrowRight className="w-4 h-4" />
+              Войти / Начать <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
@@ -98,11 +92,8 @@ export default function WelcomeScreen() {
             стратегию роста через гибридную систему: ИИ-агенты + сотрудники
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/register" className="btn-primary text-lg px-8 py-4">
-              Начать бесплатно
-            </Link>
-            <Link href="/auth/login" className="btn-secondary text-lg px-8 py-4">
-              У меня есть аккаунт
+            <Link href="/auth/login" className="btn-primary text-lg px-8 py-4 flex items-center gap-2">
+              Начать бесплатно <ArrowRight className="w-5 h-5" />
             </Link>
           </div>
         </motion.div>

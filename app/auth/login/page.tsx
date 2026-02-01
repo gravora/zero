@@ -1,27 +1,30 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Eye, EyeOff, Info } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { authAPI, GravoraAPIError } from '@/lib/gravora-api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { data: session, status } = useSession() ?? {};
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    if (status === 'authenticated' && session) {
+    // Check if already authenticated
+    if (authAPI.isAuthenticated()) {
       router.replace('/dashboard');
+    } else {
+      setIsCheckingAuth(false);
     }
-  }, [session, status, router]);
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,25 +32,26 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError('Неверный email или пароль');
-      } else {
-        router.replace('/dashboard');
-      }
+      await authAPI.login(email, password);
+      router.replace('/dashboard');
     } catch (err) {
-      setError('Произошла ошибка. Попробуйте еще раз.');
+      if (err instanceof GravoraAPIError) {
+        if (err.status === 401) {
+          setError('Неверный email или пароль');
+        } else if (err.status >= 500) {
+          setError('Ошибка сервера. Попробуйте позже.');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('Произошла ошибка. Попробуйте еще раз.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (status === 'loading') {
+  if (isCheckingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0F1225]">
         <div className="animate-pulse text-cyan-400">Загрузка...</div>
@@ -91,9 +95,18 @@ export default function LoginPage() {
           className="w-full max-w-md"
         >
           <div className="glass-effect rounded-2xl p-8 card-shadow">
-            <div className="text-center mb-8">
+            <div className="text-center mb-6">
               <h1 className="text-2xl font-bold mb-2">Добро пожаловать!</h1>
-              <p className="text-gray-400">Войдите в свой аккаунт</p>
+              <p className="text-gray-400">Войдите в платформу GRAVORA</p>
+            </div>
+
+            {/* Info Banner */}
+            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4 mb-6 flex gap-3">
+              <Info className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-cyan-200">
+                <span className="font-medium">Вход = Регистрация.</span>{' '}
+                Если аккаунта нет — он будет создан автоматически вместе с вашей компанией.
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -133,6 +146,7 @@ export default function LoginPage() {
                     className="w-full pl-12 pr-12"
                     placeholder="••••••••"
                     required
+                    minLength={6}
                   />
                   <button
                     type="button"
@@ -146,6 +160,7 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">Минимум 6 символов</p>
               </div>
 
               <button
@@ -162,15 +177,6 @@ export default function LoginPage() {
                 )}
               </button>
             </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-gray-400">
-                Нет аккаунта?{' '}
-                <Link href="/auth/register" className="text-cyan-400 hover:underline">
-                  Зарегистрируйтесь
-                </Link>
-              </p>
-            </div>
           </div>
         </motion.div>
       </main>
