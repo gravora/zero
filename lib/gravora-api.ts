@@ -365,11 +365,103 @@ export const orchestrateAPI = {
   },
 };
 
+// ============ MANUAL INPUT API ============
+export interface ManualInputMetric {
+  period_index: number;
+  period_date: string;
+  period_label: string;
+  sessions: number | null;
+  users: number | null;
+  clicks: number | null;
+  impressions: number | null;
+  organic_sessions: number | null;
+  paid_sessions: number | null;
+  leads: number | null;
+  deals: number | null;
+  sales: number | null;
+  revenue: number | null;
+  ad_spend: number | null;
+  total_budget: number | null;
+  repeat_sales: number | null;
+  cogs: number | null;
+}
+
+export interface ManualInputChannel {
+  channel_name: string;
+  channel_type: string;
+  sessions: number | null;
+  clicks: number | null;
+  impressions: number | null;
+  leads: number | null;
+  ad_spend: number | null;
+}
+
+export interface ManualInputRequest {
+  company_id: string;
+  period_type: '7days' | '30days' | '90days';
+  granularity: 'day' | 'week' | 'month';
+  currency: string;
+  timezone: string;
+  metrics: ManualInputMetric[];
+  channels?: ManualInputChannel[];
+}
+
+export interface ManualInputResponse {
+  status: string;
+  company_id: string;
+  input_id?: string;
+  validation_errors?: Array<{ field: string; message: string; severity: string }>;
+}
+
+export interface ManualInputData {
+  status: string;
+  company_id: string;
+  period_type?: string;
+  granularity?: string;
+  currency?: string;
+  metrics?: ManualInputMetric[];
+  channels?: ManualInputChannel[];
+  created_at?: string;
+}
+
+export const manualInputAPI = {
+  /**
+   * Submit manual input data
+   * NOTE: Backend endpoint needed: POST /v1/manual-input
+   */
+  submit: async (data: ManualInputRequest): Promise<ManualInputResponse> => {
+    return apiRequest<ManualInputResponse>('/manual-input', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get manual input data for company
+   * NOTE: Backend endpoint needed: GET /v1/manual-input/{company_id}
+   */
+  get: async (companyId: string): Promise<ManualInputData> => {
+    return apiRequest<ManualInputData>(`/manual-input/${companyId}`);
+  },
+
+  /**
+   * Validate manual input data without saving
+   * NOTE: Backend endpoint needed: POST /v1/manual-input/validate
+   */
+  validate: async (data: ManualInputRequest): Promise<ManualInputResponse> => {
+    return apiRequest<ManualInputResponse>('/manual-input/validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 export default {
   auth: authAPI,
   company: companyAPI,
   snapshot: snapshotAPI,
   ai: aiAPI,
   orchestrate: orchestrateAPI,
+  manualInput: manualInputAPI,
   tokenStorage,
 };

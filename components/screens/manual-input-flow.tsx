@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 
 interface ManualInputFlowProps {
-  company: any;
+  companyId: string;
 }
 
 type PeriodType = '7days' | '30days' | '90days';
@@ -91,7 +91,7 @@ const DEFAULT_CHANNELS = [
   { name: 'Прямой трафик', type: 'direct', icon: '🎯' },
 ];
 
-export default function ManualInputFlow({ company }: ManualInputFlowProps) {
+export default function ManualInputFlow({ companyId }: ManualInputFlowProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [periodType, setPeriodType] = useState<PeriodType>('30days');
@@ -372,34 +372,82 @@ export default function ManualInputFlow({ company }: ManualInputFlowProps) {
     setSaving(true);
 
     try {
-      const response = await fetch('/api/manual-input', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyId: company.id,
-          periodType,
-          granularity,
-          currency,
-          timezone,
-          metrics,
-          channelData,
-          mapping: {
-            saleEventType,
-            leadEventType,
-            dealEventType,
-            repeatWindow,
-          },
-        }),
+      // Prepare data for backend API
+      const apiMetrics = metrics.map((m) => ({
+        period_index: m.periodIndex,
+        period_date: m.periodDate,
+        period_label: m.periodLabel,
+        sessions: m.sessions,
+        users: m.users,
+        clicks: m.clicks,
+        impressions: m.impressions,
+        organic_sessions: m.organicSessions,
+        paid_sessions: m.paidSessions,
+        leads: m.leads,
+        deals: m.deals,
+        sales: m.sales,
+        revenue: m.revenue,
+        ad_spend: m.adSpend,
+        total_budget: m.totalBudget,
+        repeat_sales: m.repeatSales,
+        cogs: m.cogs,
+      }));
+
+      // Aggregate channels
+      const channelAggregates: Record<string, any> = {};
+      channelData.forEach((ch) => {
+        if (!channelAggregates[ch.channelName]) {
+          channelAggregates[ch.channelName] = {
+            channel_name: ch.channelName,
+            channel_type: ch.channelType,
+            sessions: 0,
+            clicks: 0,
+            impressions: 0,
+            leads: 0,
+            ad_spend: 0,
+          };
+        }
+        channelAggregates[ch.channelName].sessions += ch.sessions || 0;
+        channelAggregates[ch.channelName].clicks += ch.clicks || 0;
+        channelAggregates[ch.channelName].impressions += ch.impressions || 0;
+        channelAggregates[ch.channelName].leads += ch.leads || 0;
+        channelAggregates[ch.channelName].ad_spend += ch.adSpend || 0;
       });
 
-      if (response.ok) {
+      const apiChannels = Object.values(channelAggregates);
+
+      // Import and call manualInputAPI
+      const { manualInputAPI, snapshotAPI, aiAPI } = await import('@/lib/gravora-api');
+
+      // Submit manual input
+      const response = await manualInputAPI.submit({
+        company_id: companyId,
+        period_type: periodType,
+        granularity,
+        currency,
+        timezone,
+        metrics: apiMetrics,
+        channels: apiChannels.length > 0 ? apiChannels : undefined,
+      });
+
+      if (response.status === 'ok') {
+        // Build snapshot with the new data
+        try {
+          await snapshotAPI.build(companyId);
+          // Optionally run AI orchestrate
+          await aiAPI.orchestrate(companyId);
+        } catch (e) {
+          console.log('Post-save actions:', e);
+        }
+        
         router.push('/dashboard');
       } else {
-        const data = await response.json();
-        alert(data.error || 'Ошибка сохранения');
+        const errorMsg = response.validation_errors?.map((e) => e.message).join(', ') || 'Ошибка сохранения';
+        alert(errorMsg);
       }
-    } catch (error) {
-      alert('Ошибка сети');
+    } catch (error: any) {
+      console.error('Save error:', error);
+      alert(error.message || 'Ошибка сети. Возможно, endpoint ещё не реализован на backend.');
     } finally {
       setSaving(false);
     }
@@ -984,7 +1032,7 @@ export default function ManualInputFlow({ company }: ManualInputFlowProps) {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-bold">Ручной ввод метрик</h1>
-              <p className="text-sm text-gray-400">{company.name} • Этап 0.01</p>
+              <p className="text-sm text-gray-400">Компания • Этап 0.01</p>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/20 rounded-full">
               <Info className="w-4 h-4 text-yellow-400" />
